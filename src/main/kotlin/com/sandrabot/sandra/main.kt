@@ -21,6 +21,7 @@ import ch.qos.logback.classic.Logger
 import com.beust.klaxon.JsonObject
 import com.beust.klaxon.Klaxon
 import com.beust.klaxon.Parser
+import com.beust.klaxon.json
 import com.sandrabot.sandra.config.RedisConfig
 import com.sandrabot.sandra.config.SandraConfig
 import com.sandrabot.sandra.managers.CredentialManager
@@ -31,6 +32,7 @@ import io.sentry.dsn.Dsn
 import net.dv8tion.jda.api.JDAInfo
 import org.slf4j.LoggerFactory
 import java.io.File
+import kotlin.reflect.full.declaredMemberProperties
 import kotlin.system.exitProcess
 
 fun main(args: Array<String>) {
@@ -59,35 +61,34 @@ fun bootstrap(args: Array<String>): Int {
     // Read the file containing all our options
 
     val config = try {
-        val file = when {
-            args.isNotEmpty() -> args[0]
-            File("config.json").exists() -> "config.json"
-            else -> {
-                logger.info("Config file argument was not supplied and no config.json in CWD. Asking if one should be created.")
-                print("Would you like to create one in the CWD? Yes/No\n")
-                loop@ while(true) {
-                    val createConfig = readLine()!!
-                    when{
-                        arrayOf("y","ye","yes").contains(createConfig.toLowerCase()) -> {
-                            ConfigGenerator().generateConfig()
-                            break@loop
-                        }
-                        arrayOf("n","no").contains(createConfig.toLowerCase()) -> break@loop
-                        else -> {
-                            logger.error("Incorrect input \"$createConfig\" entered.")
-                            print("Please enter Yes or No.\n")
-                        }
-                    }
-                }
-                "config.json"
+        val fileName = if (args.isNotEmpty()) args[0] else "config.json"
+        val file = File(fileName)
+        if (!file.exists()) {
+            // Generate a configuration file using default values
+            val config = json {
+                val sandraConfig = SandraConfig()
+                obj(SandraConfig::class.declaredMemberProperties.map { it.name to it.get(sandraConfig) })
             }
+            config["redis"] = json {
+                val redisConfig = RedisConfig()
+                obj(RedisConfig::class.declaredMemberProperties.map { it.name to it.get(redisConfig) })
+            }
+            // We can't exactly provide default credentials, so we set them to empty strings instead
+            config["credentials"] = json { obj(CredentialManager::class.declaredMemberProperties.map { it.name to "" }) }
+            try {
+                file.writeText(config.toJsonString(prettyPrint = true))
+                logger.info("The configuration file couldn't be found, one has been created for you at ${file.absolutePath}")
+            } catch (e: Exception) {
+                logger.error("Failed to write default configuration file at ${file.absolutePath}", e)
+            }
+            return 1
         }
-        val obj = Parser.default().parse(file)
+        val obj = Parser.default().parse(fileName)
         if (obj is JsonObject) obj else {
             throw IllegalArgumentException("Configuration file is improperly formatted")
         }
     } catch (e: Exception) {
-        logger.error("Failed to read config file, exiting immediately", e)
+        logger.error("Failed to read configuration file, exiting immediately", e)
         return 1
     }
 
