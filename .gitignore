@@ -9,3 +9,7 @@ out
 # Ignore Sandra files
 logs
 config.json
+gradlew.bat
+gradle/wrapper/gradle-wrapper.properties
+gradle/wrapper/gradle-wrapper.jar
+gradlew
