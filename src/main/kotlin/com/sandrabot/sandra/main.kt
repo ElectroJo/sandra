@@ -46,6 +46,9 @@ fun bootstrap(args: Array<String>): Int {
     val beginStartup = System.currentTimeMillis()
     val logger = LoggerFactory.getLogger(Sandra::class.java)
 
+    //Configure command line arguments as early as possible (maybe not here?)
+    val keywordArguments = json { obj( args.map { s -> s.removePrefix("--").split("=").let { Pair( it[0],it[1] ) } } ) }
+
     // Print the logo and any relevant version information
     println("\n${Sandra::class.java.getResource("/logo.txt").readText()}")
     println(" | Version: ${SandraInfo.VERSION}")
@@ -59,7 +62,7 @@ fun bootstrap(args: Array<String>): Int {
 
     // Read the file containing all our options
     val config = try {
-        val fileName = if (args.isNotEmpty()) args[0] else "config.json"
+        val fileName = if (keywordArguments.containsKey("config")) keywordArguments["config"].toString() else "config.json"
         val file = File(fileName)
         if (!file.exists()) {
             // Generate a configuration file using default values
